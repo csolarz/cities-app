@@ -61,15 +61,16 @@ app.get('*', (req,res) =>{
     res.sendFile(path.join(__dirname+'/client/build/index.html'));
 });
 
-io.on('connection', socket => {
+io.on('connection', async(socket) => {
     console.log('a user connected');
  
-    socket.on('getCities', data => {
+    let _data = await getRequestData();
+    console.log(_data);
+    io.emit('setCities',_data );
+
+    socket.on('getCities', async() => {
       console.log('getCities');
-
-
-      let _data = getRequestData();
-      console.log(_data);
+      let _data = await getRequestData();
       io.emit('setCities',_data );
       
 
@@ -87,7 +88,7 @@ async function getRequestData()
 {
     
     const cities =  getCitiesData();
-    console.log(cities);
+
 
     var result = await Promise.all(cities.map(async(city) => {
 
@@ -109,5 +110,6 @@ requestAsync = (url) =>
 
 function getCitiesData(){
 
+    //TODO: Migrar a redis
     return cities;
 }

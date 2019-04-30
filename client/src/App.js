@@ -20,7 +20,8 @@ class App extends Component {
 
   componentDidMount = () => {
 
-    setInterval(this.send, 10000);
+    setInterval(this.send, 3000);
+    
 
     socket.on('setCities', (data) => {
       console.log(data);
@@ -37,11 +38,10 @@ class App extends Component {
          {cities.map((item)=> {
            return (
           <div>
-          <div>City: {item.city.id}</div>
+          <div>Ciudad: {item.name}{item.now}</div>
           <ul>
-          <li>{item.time}</li>
-          <li>{item.temperature}</li>  
-          <li>{item.city}</li>
+          <li>Time: {new Date(item.time).toTimeString()}</li>
+          <li>Temperature: {item.temperature}</li>  
           </ul>
           </div>)
         })}
