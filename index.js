@@ -9,7 +9,7 @@ const citiesInfo = require("./cities.json");
 
 const REDIS_KEY_CITY = "api:cities";
 const REDIS_HASH_KEY_ERROR = "api:erros";
-const REDIS_HOST = process.env.REDIS_URL;
+const REDIS_HOST = process.env.REDISCLOUD_URL;
 const API_KEY = "fe0c04d83b6b1db087328c76a8f43c60";
 const API_URL = "https://api.darksky.net/forecast/";
 const ERROR_MSG = "How unfortunate! The API Request Failed";
