@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client";
-const socket = io("localhost:5000");
+const socket = io();
 
 const App = () => {
 
