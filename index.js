@@ -17,7 +17,6 @@ const MAX_RETRY = 5;
 const TIME_UPDATE_CLIENT = 10000;
 const TIME_RETRY = 500;
 
-
 //static files react app
 app.use(express.static(path.join(__dirname, "client/build")));
 
@@ -47,21 +46,30 @@ app.get("/errors", (req, res) => {
 /*
 TODO: REQ-6:
 El frontend deberá actualizarse cada 10 segundos a través de web sockets. 
+Comment: Se actualiza para todas las conexiones cada 10 segundos, asi se mantien solo una actualizacion de datos en el backend.
+Tambien al tener 0 conexiones se detiene el setInterval
 */
+var intId;
+var online = 0;
 io.on("connection", async socket => {
-  console.log("a user connected");
 
-  let _data = await getRequestData();
-  console.log(_data);
-  io.emit("setCities", _data);
+  online++;
 
-  setInterval(async () => {
-    let _data = await getRequestData();
-    io.emit("setCities", _data);
-  }, TIME_UPDATE_CLIENT);
+  let _tempData = await getCitiesFromRedis();
+  console.log(_tempData);
+  socket.emit("setCities",_tempData);
 
-  socket.on("getCities", async () => {
-    console.log("getCities");
+  if (online === 1) {
+    intId = setInterval(async () => {
+      let _data = await getRequestData();
+      io.emit("setCities", _data);
+    }, TIME_UPDATE_CLIENT);
+  }
+
+  socket.on("disconnect", function() {
+    online--;
+    if (online === 0) clearInterval(intId);
+
   });
 });
 
@@ -80,8 +88,7 @@ redisclient.on("error", function(err) {
 const port = process.env.PORT || 5000;
 
 server.listen(port, () => {
-
-/*
+  /*
 TODO: REQ-2:
 Las latitudes y longitudes de cada ciudad deben ser guardadas en Redis al momento de iniciar la aplicación.
 */
@@ -100,35 +107,30 @@ const getRequestData = async () => {
   //Get all city data from api
   const result = await Promise.all(
     cities.map(async city => {
-
       const url = `${API_URL}${API_KEY}/${city.latitude},${city.longitude}`;
 
       let cityInfo = { ...city };
 
       try {
-
         const response = await retry(requestAsync, url);
         const { timezone } = response;
         const { temperature } = response.currently;
 
         cityInfo.timezone = timezone;
         cityInfo.temperature = temperature;
-        cityInfo.time = +new Date();//last update
+        cityInfo.time = +new Date(); //last update
 
 /*
 TODO: REQ-6.1:
 El proceso deberá actualizar redis y luego enviar el update al frontend.
 */
         redisclient.set(cityInfo.id, JSON.stringify(cityInfo));
-
-
       } catch (error) {
         //obtener ultimo valor desde redis si supero todos los intentos de llamada a la api**plus
-        let _cityInfo = await getCityFromRedis(city.id);      
+        let _cityInfo = await getCityFromRedis(city.id);
 
-        if(_cityInfo)
-         return _cityInfo
-    }
+        if (_cityInfo) return _cityInfo;
+      }
 
       return cityInfo;
     })
@@ -150,12 +152,14 @@ const retry = (fn, url, ms = TIME_RETRY, retriesLeft = MAX_RETRY) =>
       .then(resolve)
       .catch(e => {
         setTimeout(() => {
-/*
+          /*
 TODO: REQ-5.1:
 cada fallo deberá guardarse en Redis dentro de un hash llamado "api.errors", la llave debera ser el timestamp y el contenido debe ser relevante al error. 
 El handler de error deberá capturar solamente este error y no otro con diferente clase o mensaje.
-*/          if (e instanceof Error && e.message === ERROR_MSG) {
-            console.log("Error 10% :)");
+*/ if (
+            e instanceof Error &&
+            e.message === ERROR_MSG
+          ) {
             redisclient.hset(
               REDIS_HASH_KEY_ERROR,
               +new Date(),
@@ -163,7 +167,6 @@ El handler de error deberá capturar solamente este error y no otro con diferent
             );
           }
           retries++;
-          console.log(`retries ${retriesLeft}`);
           if (retriesLeft === 1) {
             return reject("maximum retries exceeded");
           }
@@ -174,8 +177,7 @@ El handler de error deberá capturar solamente este error y no otro con diferent
 
 const requestAsync = url =>
   new Promise((resolve, reject) => {
-
-/*
+    /*
 TODO: REQ-4:
 Cada request a la API tiene un 10% de chances de fallar, al momento de hacer el request deberá suceder lo siguiente:
 if (Math.rand(0, 1) < 0.1) throw new Error('How unfortunate! The API Request Failed')
@@ -194,21 +196,16 @@ if (Math.rand(0, 1) < 0.1) throw new Error('How unfortunate! The API Request Fai
     });
   });
 
-  
 const getCitiesFromRedis = () =>
   new Promise((resolve, reject) => {
-    redisclient.get(REDIS_KEY_CITY, (error, result) => {      
-        error ? reject(error) : resolve(JSON.parse(result));
-      });
+    redisclient.get(REDIS_KEY_CITY, (error, result) => {
+      error ? reject(error) : resolve(JSON.parse(result));
+    });
   });
 
-  const getCityFromRedis = (cityId) =>
+const getCityFromRedis = cityId =>
   new Promise((resolve, reject) => {
     redisclient.get(cityId, (error, result) => {
-      
-        console.log(error);
-        console.log(result);
-        error ? reject(error) : resolve(JSON.parse(result));
-      
+      error ? reject(error) : resolve(JSON.parse(result));
     });
   });
