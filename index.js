@@ -9,7 +9,7 @@ const citiesInfo = require("./cities.json");
 
 const REDIS_KEY_CITY = "api:cities";
 const REDIS_HASH_KEY_ERROR = "api:erros";
-const REDIS_HOST = "cities-001.8zlanq.0001.use2.cache.amazonaws.com";
+const REDIS_HOST = process.env.REDIS_URL;
 const API_KEY = "fe0c04d83b6b1db087328c76a8f43c60";
 const API_URL = "https://api.darksky.net/forecast/";
 const ERROR_MSG = "How unfortunate! The API Request Failed";
@@ -41,6 +41,7 @@ app.get("/errors", (req, res) => {
     else res.send(data);
   });
 });
+
 
 //socket io
 /*
@@ -74,7 +75,7 @@ io.on("connection", async socket => {
 });
 
 //redis
-const redisclient = redis.createClient();
+const redisclient = redis.createClient(REDIS_HOST);
 
 redisclient.on("connect", function() {
   console.log("Redis client connected");
