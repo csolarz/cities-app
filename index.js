@@ -5,13 +5,12 @@ var server = require("http").Server(app);
 var io = require("socket.io")(server);
 const request = require("request");
 const redis = require("redis");
+require('dotenv').config()
 const citiesInfo = require("./cities.json");
 
 const REDIS_KEY_CITY = "api:cities";
 const REDIS_HASH_KEY_ERROR = "api:erros";
 const REDIS_HOST = process.env.REDISCLOUD_URL;
-const API_KEY = "fe0c04d83b6b1db087328c76a8f43c60";
-const API_URL = "https://api.darksky.net/forecast/";
 const ERROR_MSG = "How unfortunate! The API Request Failed";
 const MAX_RETRY = 5;
 const TIME_UPDATE_CLIENT = 10000;
@@ -57,10 +56,10 @@ io.on("connection", async socket => {
   online++;
 
   let _tempData = await getCitiesFromRedis();
-  console.log(_tempData);
   socket.emit("setCities",_tempData);
 
   if (online === 1) {
+    console.log("clientes onine " + online);
     intId = setInterval(async () => {
       let _data = await getRequestData();
       io.emit("setCities", _data);
@@ -69,6 +68,7 @@ io.on("connection", async socket => {
 
   socket.on("disconnect", function() {
     online--;
+    console.log("clientes onine " + online);
     if (online === 0) clearInterval(intId);
 
   });
@@ -82,7 +82,7 @@ redisclient.on("connect", function() {
 });
 
 redisclient.on("error", function(err) {
-  console.log("Something went wrong " + err);
+  console.log("Redis client error " + err);
 });
 
 //server startup
@@ -98,21 +98,31 @@ Las latitudes y longitudes de cada ciudad deben ser guardadas en Redis al moment
   console.log("Server listening on port: ", port);
 });
 
+
+/////********
+//Funciones internas
+/////********
+
 /*
 TODO: REQ-3:
 Cada request de la API debera ir a Redis, sacar las latitudes y longitudes correspondientes, y hacer las consultas necesarias al servicio de Forecast.io.
 */
 const getRequestData = async () => {
+  
+  console.log("Obteniendo ciudades desde redis");
+
   const cities = await getCitiesFromRedis();
 
   //Get all city data from api
   const result = await Promise.all(
     cities.map(async city => {
-      const url = `${API_URL}${API_KEY}/${city.latitude},${city.longitude}`;
+
+      const url = `${process.env.API_URL}${process.env.API_KEY}/${city.latitude},${city.longitude}`;
 
       let cityInfo = { ...city };
 
       try {
+
         const response = await retry(requestAsync, url);
         const { timezone } = response;
         const { temperature } = response.currently;
@@ -131,6 +141,8 @@ El proceso deberá actualizar redis y luego enviar el update al frontend.
         let _cityInfo = await getCityFromRedis(city.id);
 
         if (_cityInfo) return _cityInfo;
+
+        
       }
 
       return cityInfo;
@@ -185,14 +197,23 @@ if (Math.rand(0, 1) < 0.1) throw new Error('How unfortunate! The API Request Fai
 */
     if (Math.random(0, 1) < 0.1) throw new Error(ERROR_MSG);
 
+    console.log("invocando api");
     request(url, (error, response, result) => {
       {
-        if (typeof result !== "object") {
+        let responseData;
+        try {
+          responseData = JSON.parse(result)
+        } catch (error) {
+          console.log(`error en resultado de respuesta de la api. result:${result}  url: ${url}`);
           reject(result);
           return;
         }
 
-        error ? reject(error) : resolve(JSON.parse(result));
+        if(error){
+          console.log("error al consultar api " + error);
+        }
+
+        error ? reject(error) : resolve(responseData);
       }
     });
   });
